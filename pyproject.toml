@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "pygaello-inferences"
+version = "0.1.0"
+description = "The very core part of the Gaello X project: how inferences on future event are made. This package builds  up on the pygeallo-model and pygaello-ops packages."
+authors = ["Cephas Nukunu Soga <110126432+CephasSoga@users.noreply.github.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "cycling"}, {include = "_types"}, {include = "worker"}, {include = "utils_inference"}, {include = "trends"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pytrends = "^4.9.2"
+transformers = "^4.43.4"
+pymongo = {extras = ["srv"], version = "^4.8.0"}
+spacy = "^3.7.5"
+py2neo = "^2021.2.4"
+setuptools = "^73.0.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,2 @@
+This python package is the result of the modular-wise split of the Gaello-With-Janine git repository (from the same author).
+It covers interacting with aneo4j Graph and calling another package of the same family (Models) to generae insights from the collected data.
