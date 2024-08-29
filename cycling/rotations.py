@@ -1,23 +1,25 @@
 from  dataclasses import dataclass
-from typing import Set, List, Optional
+from typing import Set, List, Optional, Any
 @dataclass
 class Rotator:
-    args: Set[List[str]]
-    diary: Optional[List] = []
+    args: Set[Any]
+    diary: List
     iteration = 0
 
-    def next(self):
+    def next(self) -> Any | None:
         if len(self.diary) == 0:
             self.iteration += 1
             self.diary.append(self.args[0])
             return self.args[0]
         else:
+            if self.iteration >= len(self.args) - 1:
+                return None
             _next_value = self.args[self.iteration]
             self.diary.append(_next_value)
             self.iteration += 1
             return _next_value
         
-    def previous(self):
+    def previous(self) -> Any | None:
         if len(self.diary) == 0:
             return None
         else:
@@ -26,6 +28,6 @@ class Rotator:
                 _previous_iteration = len(self.diary) - 1
             return self.diary[_previous_iteration]
         
-    def current(self):
+    def current(self) -> Any:
         return self.diary[self.iteration]
 

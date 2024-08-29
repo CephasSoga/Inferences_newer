@@ -10,4 +10,9 @@ class Refactor:
         pass
 
     def constraint(self, func: Callable[..., Any]) -> Set:
+        return set(filter(func, self.args))
+    
+    def map(self, func: Callable[..., Any]) -> Set:
         return set(map(func, self.args))
+    
+    
