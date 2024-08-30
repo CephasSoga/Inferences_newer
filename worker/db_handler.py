@@ -50,7 +50,7 @@ class MongoPusher:
         try:
             result = collection.insert_many(data)
             self.logger.log("info", f"Successfully pushed {len(result.inserted_ids)} documents to MongoDB collection: {collection_date}")
-            return result.inserted_ids > 0        
+            return len(result.inserted_ids) > 0        
         except Exception as e:
             self.logger.log("error", f"Error encountered while pushing documents to MongoDB collection: {collection_date}", e)
             return False
