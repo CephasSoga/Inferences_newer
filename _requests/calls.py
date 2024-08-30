@@ -49,15 +49,15 @@ class NewsRequest:
 
         self.client = aiohttp.ClientSession()
 
-    async def request(self, url: str,   q: str | list[str] = None, country: str = None, search_in: str = None, domains: str = None, from_param: str = None, to: str = None, category: str = None, sources: str = None, language: str = "en", pageSize: int = None, page: int = None, sortBy: str="relevancy") -> dict:
-        if (search_in and not q) or (q and not search_in):
-            raise ValueError("Both `q` and `search_in` should be provided simultaneously")
+    async def request(self, url: str,   q: str | list[str] = None, country: str = None, search_in: str = None, domains: str = None, from_param: datetime | str = None, to: datetime |str = None, category: str = None, sources: str = None, language: str = "en", pageSize: int = None, page: int = None, sortBy: str = None) -> dict:
+        if (search_in and not q):
+            raise ValueError("if you provide `search_in`, you must also provide `q`.")
         
         if search_in not in [None, 'title', 'description', 'content']:
             raise ValueError("Invalid `search_in` argument. Choose from [None, 'title', 'description', 'content']")
         
         if not sortBy in [None, 'relevancy', 'publishedAt', 'popularity']:
-            raise ValueError("Invalid `sortBy` argument. Choose from ['relevancy', 'publishedAt', 'popularity']")
+            raise ValueError("Invalid `sortBy` argument. Choose from [None, 'relevancy', 'publishedAt', 'popularity']")
         
         if pageSize and pageSize > 100:
             raise ValueError("Invalid `pageSize` argument. Choose a number between 1 and 100")
@@ -158,14 +158,13 @@ class Parser:
                 content=article['content'],
             )
 
-
 async def main():
     import time
     s = time.perf_counter()
     request = NewsRequest()
-    r = await request.everything(q=["market performance", "bitcoin"], sortBy="relevancy", search_in="content", language=None, page=2, pageSize=20)
+    r = await request.everything(q="apple stocks", from_param='2024-08-28')
     print("Result: ", r['totalResults'])
-    #p = Parser(r)
+    p = Parser(r)
     #for article in p():
     #    print(article)
     await request.close()

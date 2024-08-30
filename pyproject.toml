@@ -5,7 +5,7 @@ description = "The very core part of the Gaello X project: how inferences on fut
 authors = ["Cephas Nukunu Soga <110126432+CephasSoga@users.noreply.github.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "cycling"}, {include = "_types"}, {include = "worker"}, {include = "utils_inference"}, {include = "trends"}]
+packages = [{include = "cycling"}, {include = "_types"}, {include = "worker"}, {include = "utils_inference"}, {include = "_requests"}]
 
 [tool.poetry.dependencies]
 python = "^3.12"
@@ -14,6 +14,8 @@ spacy = "^3.7.5"
 setuptools = "^73.0.1"
 aiohttp = "^3.10.5"
 newsapi-python = "^0.2.7"
+nltk = "^3.9.1"
+sumy = "^0.11.0"
 
 
 [build-system]
