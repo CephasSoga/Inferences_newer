@@ -1,24 +1,72 @@
 import json
 import uuid
+import time
 import random
 import inspect
 import asyncio
 import concurrent.futures as futures
 from typing import List, Callable, Optional, Any, Dict
 from dataclasses import dataclass
-from functools import partial
+from functools import partial, wraps
 from datetime import datetime
 
 
 from janine.RichText import TextCompletion
 from janine.Generators import ImageGenerator
-from cycling.stages import Stage
 from utils_inference.logs import Logger
 from _requests.calls import NewsRequest, Parser
 from _requests.static import queries, mongodb_uri
 from worker.processor import Processor
 from worker.db_handler import MongoPusher
 
+MAX_RETRIES = 3
+DELAY_AFTER_FAILURE = 1
+BACKOFF_FACTOR = 2
+
+def retry(max_attempts=MAX_RETRIES, delay=DELAY_AFTER_FAILURE, backoff=BACKOFF_FACTOR):
+    delay = delay
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            while attempts < max_attempts:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    print(f"Function {func.__name__} on attempt {attempts}/{max_attempts} failed with error: {e}")
+                    attempts += 1
+                    delay *= backoff
+                    if attempts < max_attempts:
+                        print(f"Retrying in {delay} seconds...")
+                        time.sleep(delay)
+                    else:
+                        raise e
+        return wrapper
+    return decorator
+
+
+def async_retry(max_attempts=MAX_RETRIES, delay=DELAY_AFTER_FAILURE, backoff=BACKOFF_FACTOR):
+    delay = delay
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            attempts = 0
+            while attempts < max_attempts:
+                try:
+                    if inspect.iscoroutinefunction(func):
+                        return await func(*args, **kwargs)
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    print(f"Async function {func.__name__} on attempt {attempts}/{max_attempts} failed with error: {e}")
+                    attempts += 1
+                    delay *= backoff
+                    if attempts < max_attempts:
+                        print(f"Retrying in {delay} seconds...")
+                        asyncio.sleep(delay)
+                    else:
+                        raise e
+        return wrapper
+    return decorator
 
 @dataclass
 class Stage:
@@ -97,7 +145,7 @@ class Worker:
         
         return stage_result
     
-
+    @async_retry()
     async def process_stage(self, stage: Stage, history: List[Dict[str, Any]], **options) -> str | None:
         self.logger.log("info", f"Processing stage: [{stage.name}]")
         if not isinstance(stage.name, str) or len(stage.name.strip()) == 0:
@@ -223,19 +271,19 @@ class InferentialWorker:
             precomputed_labels[str(idx)] = self.make_labels(text)
         return precomputed_labels
     
-    async def __call__(self, texts: List[str] = None):
+    async def __call__(self, texts: List[str] = None, max_title_tokens: int = 8):
         if not texts and self.executor_results:
             texts = self.executor_results
         precomputed_labels = self.precompute_labels(texts)
         results = {}
         for idx, text in enumerate(texts):
             self.logger.log("info", f"Processing text  at index: {idx + 1} of {len(texts)}")
-            title = await self.make_title(text)
+            title = await self.make_title(text, max_title_tokens)
             image_url = await self.make_image(title)
             tags = self.make_tags(text)
             results[str(idx)] = {
                 "title": title,
-                "description": "",
+                "description": "Warning: This content is AI generated.",
                 "labels": precomputed_labels[str(idx)],
                 "tags": tags,
                 "urls": [], # TODO: add urls
@@ -279,12 +327,6 @@ class MainWorker:
             await executor.request_handler.close()
 
 
-if __name__ == "__main__":
-    import os
-    os.environ["OPENAI_API_KEY"] = "sk-proj-QyWSLHFDxXFRXNiUuTFtT3BlbkFJJiA8SyBqwjGX4TsZGKXj"
-    # raises exceptions sometimes during api calls
-    # raises exceptions  [Operator '>' not supported for operand types 'str' and 'int'] when pushing
-    asyncio.run(MainWorker().exec())
 
 
 

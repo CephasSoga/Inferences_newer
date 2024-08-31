@@ -23,6 +23,7 @@ class Processor:
         return [word for word, pos in tagged_words if pos.startswith('NN')]
     
     async def make_summary(self, text: str, tokens_max_count: int = 48, model_name: str = "gpt-3.5-turbo"):
+        """Summarizes a text by making an asynchronous request to the OpenAI API."""
         if not text or not tokens_max_count:
             return ""
         completion_model = TextCompletion()

@@ -14,6 +14,18 @@ class MongoPusher:
         self.logger = Logger("MongoPusher")
 
     def connect(self, uri: str | None = None):
+        """
+        Connects to a MongoDB instance using the provided URI, or the current client if the URI is None.
+
+        Args:
+            uri (str | None): The URI to connect to, or None to use the current client.
+
+        Returns:
+            bool: Whether the connection was successful.
+
+        Raises:
+            ValueError: If no MongoDB URI is provided, and no client is currently connected.
+        """
         if uri is None and self.client is None:
             raise ValueError("No MongoDB URI provided")
         self.client = self.client or MongoClient(uri, server_api=ServerApi('1'))
@@ -28,6 +40,13 @@ class MongoPusher:
             return False
 
     def bulk_push(self, data: List[Any] | Set[Any]):
+        """
+        Push a list or set of inferences to the MongoDB collection, one document per inference.
+
+        :param data: List or set of inferences to push
+        :return: True if all inferences were successfully pushed, False otherwise
+        :raises ValueError: If no MongoDB client is provided, or if no data is provided to push
+        """
         if self.client is None:
             raise ValueError("No MongoDB client provided")
         

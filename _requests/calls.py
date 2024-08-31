@@ -7,8 +7,6 @@ from datetime import datetime
 from utils_inference.logs import Logger
 
 
-_ = 'GET https://newsapi.org/v2/top-headlines?country=us&apiKey=b11bb9f5fb68447397ee4a270fecb49d'
-
 # simple interface - not meant to be used directly: The request to the news API will match this pattern or `None` if the request was not successful.
 resultPattern = {
     "status": "ok",
@@ -18,6 +16,7 @@ resultPattern = {
 
 @dataclass
 class Article:
+    """Interface of an Article object."""
     title: str
     author: str
     url: str
@@ -42,7 +41,9 @@ class Article:
 
 
 class NewsRequest:
+    """Class for making requests to the news API."""
     def __init__(self):
+        """Initializes the class with a logger, API key, base URL, and an aiohttp ClientSession."""
         self.logger = Logger("Headlines-Request")
         self.apikey = "b11bb9f5fb68447397ee4a270fecb49d"
         self.base_url = "https://newsapi.org/v2/top-headlines"
@@ -50,6 +51,7 @@ class NewsRequest:
         self.client = aiohttp.ClientSession()
 
     async def request(self, url: str,   q: str | list[str] = None, country: str = None, search_in: str = None, domains: str = None, from_param: datetime | str = None, to: datetime |str = None, category: str = None, sources: str = None, language: str = "en", pageSize: int = None, page: int = None, sortBy: str = None) -> dict:
+        """Makes an asynchronous HTTP GET request to the News API with the provided parameters and returns the JSON response."""
         if (search_in and not q):
             raise ValueError("if you provide `search_in`, you must also provide `q`.")
         
@@ -101,6 +103,7 @@ class NewsRequest:
                 return await response.json()
 
     async def headlines(self, q: str | list[str] = None, country: str = None, category: str = None, sources: str = None, language: str = "en", pageSize: int = None, page: int = None, sortBy: str="relevancy") -> dict:
+        """Calls the request method to fetch top headlines based on the provided parameters."""
         url = 'https://newsapi.org/v2/top-headlines'
         self.logger.log("info", f"Requesting  news headlines from {url} with params: {locals()}")
         try:
@@ -119,6 +122,7 @@ class NewsRequest:
             self.logger.log("error", "Error encountered while requesting news headlines", e)
             
     async def everything(self, q: str | list[str] = None, sources: str = None, search_in: str = None, domains: str = None, from_param: str = None, to: str = None, language: str = "en", page:  int = None, pageSize: int = None, sortBy: str="relevancy") -> dict:
+        """Calls the request method to fetch news articles based on the provided parameters."""
         url = 'https://newsapi.org/v2/everything'
         self.logger.log("info", f"Requesting  news articles from{url} with params: {locals()}")
         try:
@@ -139,13 +143,16 @@ class NewsRequest:
             self.logger.log("error", "Error encountered while requesting news articles", e)
     
     async def  close(self):
+        """Closes the aiohttp ClientSession."""
         await self.client.close()
 
 @dataclass
 class Parser:
+    """Handles the parsing of the JSON response from the News API into a list of Article objects."""
     arg: dict
 
     def __call__(self):
+        """Parses the JSON response and yields Article objects."""
         target = self.arg['articles']
         for article in target:
             yield Article(

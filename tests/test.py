@@ -1,6 +1,6 @@
 async def main():
     import os
-    os.environ["OPENAI_API_KEY"] = "sk-proj-QyWSLHFDxXFRXNiUuTFtT3BlbkFJJiA8SyBqwjGX4TsZGKXj"
+    os.environ["OPENAI_API_KEY"] = ""
     stages = [
         Stage(name="Example Stage", description="This is an example stage", query="hello"),
         Stage(name="Another Example Stage", description="This is another example stage", query="when is chrismas?"),
