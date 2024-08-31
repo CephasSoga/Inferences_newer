@@ -15,4 +15,8 @@ if __name__ == "__main__":
     # **NOTE**: refer to logging for more details
     # **NOTE**: some other error causes may arise as well: http 429 rate limit error, etc\
     # **NOTE**: this code has not been tested aginst those errors but logs still offer an exhaustive error message
+
+    # **NOTE**: storing genreated image urls in the db leads to images being lost after some time.
+    # **NOTE**: eventually, storing them as raw bytes (the current approach, which is more efficient in terms of time when retreiving them) 
+    # solves it; but is not much efficient in terms of storage.
     asyncio.run(MainWorker().exec())

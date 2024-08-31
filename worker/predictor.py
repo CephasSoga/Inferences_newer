@@ -14,10 +14,11 @@ from datetime import datetime
 from janine.RichText import TextCompletion
 from janine.Generators import ImageGenerator
 from utils_inference.logs import Logger
+from utils_inference.async_jobs import get_bytes
 from _requests.calls import NewsRequest, Parser
 from _requests.static import queries, mongodb_uri
 from worker.processor import Processor
-from worker.db_handler import MongoPusher
+from worker.db_handler import MongoPusher, ImageBinary
 
 MAX_RETRIES = 3
 DELAY_AFTER_FAILURE = 1
@@ -82,7 +83,7 @@ class Inference:
     description: str
     content: str
     date: str
-    image_url: Optional[str]
+    image: Optional[bytes]
     urls: Optional[List[str]]
     labels: Optional[List[str]]
     tags: Optional[List[str]]
@@ -97,7 +98,7 @@ class Inference:
             'id': self.id,
             'description': self.description,
             'content': self.content,
-            'image_url': self.image_url,
+            'image': "bytes" if self.image else "None",
             'urls': self.urls,
             'labels': self.labels,
             'tags': self.tags
@@ -110,7 +111,7 @@ class Inference:
             'description': self.description,
             'content': self.content,
             'date': self.date,
-            'image_url': self.image_url,
+            'image': self.image,
             'urls': self.urls,
             'labels': self.labels,
             'tags': self.tags
@@ -260,10 +261,19 @@ class InferentialWorker:
         # TODO: make this more intelligent
         return ["finance", "stock market", "economy"]
     
-    async def make_image(self, text: str) -> str:
+    async def make_image(self, text: str, image_size: str = "512x512") -> bytes:
         if not text or len(text) == 0:
-            return ""
-        return await self.image_model.generate(prompt=text)
+            return None
+        image_url: List[str | None] = await self.image_model.generate(prompt=text, size=image_size)
+
+        image_bytes = await get_bytes(image_url[0])
+
+        if not image_bytes:
+            return None
+        
+        image_data = ImageBinary.encode_from_bytes(image_bytes)
+
+        return image_data
     
     def precompute_labels(self, texts: List[str]) -> List[List[str]]:
         precomputed_labels = {}
@@ -271,7 +281,17 @@ class InferentialWorker:
             precomputed_labels[str(idx)] = self.make_labels(text)
         return precomputed_labels
     
-    async def __call__(self, texts: List[str] = None, max_title_tokens: int = 8):
+    async def __call__(self, texts: List[str] = None, max_title_tokens: int = 8, image_size: str = "512x512"):
+        """
+        Processes a list of texts and yields Inference objects for each text.
+
+        If no texts are provided, the executor_results attribute of this object is used.
+
+        :param texts: List of texts to process
+        :param max_title_tokens: Maximum number of tokens in the title
+        :param image_size: Size of the generated image in the format "widthxheight"
+        :yield: Inference objects
+        """
         if not texts and self.executor_results:
             texts = self.executor_results
         precomputed_labels = self.precompute_labels(texts)
@@ -279,7 +299,7 @@ class InferentialWorker:
         for idx, text in enumerate(texts):
             self.logger.log("info", f"Processing text  at index: {idx + 1} of {len(texts)}")
             title = await self.make_title(text, max_title_tokens)
-            image_url = await self.make_image(title)
+            image = await self.make_image(title, image_size)
             tags = self.make_tags(text)
             results[str(idx)] = {
                 "title": title,
@@ -287,7 +307,7 @@ class InferentialWorker:
                 "labels": precomputed_labels[str(idx)],
                 "tags": tags,
                 "urls": [], # TODO: add urls
-                "image_url": image_url,
+                "image": image,
                 "content": text
             }
         for key in results.keys():
@@ -296,7 +316,7 @@ class InferentialWorker:
                 title=results[key]["title"],
                 description=results[key]["description"],
                 content=results[key]["content"],
-                image_url=results[key]["image_url"],
+                image=results[key]["image"],
                 urls=results[key]["urls"],
                 labels=results[key]["labels"],
                 tags=results[key]["tags"]
@@ -307,13 +327,13 @@ class InferentialWorker:
 class MainWorker:
     logger = Logger("Main-Worker")
     inferences = set()
-    async def exec(self, db_uri: str = mongodb_uri, qx: str | List[str] = ["apple stocks", "market performance"], type: str = 'everything', stop_count: int = 2, **options):
+    async def exec(self, db_uri: str = mongodb_uri, qx: str | List[str] = ["apple stocks", "market performance"], type: str = 'everything', stop_count: int = 2, max_title_tokens: int = 8, image_size: str = "512x512", **options):
         try:
             executor = Executor()
             await executor.build_base(qx=qx, type=type, stop_count=stop_count, **options)
             results = executor(executor.stage_wrapper[:2])
             inference_worker = InferentialWorker(results)
-            async for result in inference_worker():
+            async for result in inference_worker(max_title_tokens=max_title_tokens, image_size=image_size):
                 self.inferences.add(result)
 
             pusher = MongoPusher(None)
@@ -325,6 +345,12 @@ class MainWorker:
             raise
         finally:
             await executor.request_handler.close()
+            try:
+                _ = pusher.remove_outdated()
+            except Exception as e:
+                self.logger.log("error", "An error occurred while removing outdated collections", e)
+            finally:
+                pusher.close()
 
 
 
