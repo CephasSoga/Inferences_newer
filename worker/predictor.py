@@ -13,10 +13,10 @@ from datetime import datetime
 
 from janine.RichText import TextCompletion
 from janine.Generators import ImageGenerator
-from utils_inference.logs import Logger
+from utils_inference.logs import Logger, async_timer, timer
 from utils_inference.async_jobs import get_bytes
 from _requests.calls import NewsRequest, Parser
-from _requests.static import queries, mongodb_uri
+from config.static import BroadConfigArgs, Balancer, InferencesArgs
 from worker.processor import Processor
 from worker.db_handler import MongoPusher, ImageBinary
 
@@ -77,6 +77,11 @@ class Stage:
     labels: Optional[List[str]] = None
     tags: Optional[List[str]] = None
 
+    def __post_init__(self):
+        opening = BroadConfigArgs.PROMPT_EDGES.value["opening"]
+        closing = BroadConfigArgs.PROMPT_EDGES.value["closing"]
+        self.query = opening + self.query + closing
+
 @dataclass
 class Inference:
     title: str
@@ -131,7 +136,7 @@ class Worker:
     def __init__(self, stages: List[Stage]):
         self.stages = stages
         self.completion_agent = TextCompletion()
-        self.completion_agent.model = "gpt-3.5-turbo"
+        self.completion_agent.model = InferencesArgs.MODEL_NAME.value
 
         self.history: List[Dict[str, Any]] = [] # an updatable history attribute
 
@@ -147,8 +152,8 @@ class Worker:
         return stage_result
     
     @async_retry()
+    @async_timer()
     async def process_stage(self, stage: Stage, history: List[Dict[str, Any]], **options) -> str | None:
-        self.logger.log("info", f"Processing stage: [{stage.name}]")
         if not isinstance(stage.name, str) or len(stage.name.strip()) == 0:
             self.logger.log("error", f"Invalid stage name: {stage.name}. Skipping...")
             return None
@@ -165,8 +170,6 @@ class Worker:
         records = [{"role": "user","content": query,}, {"role": "system","content": stage_result}] # create the expected record format
         self.history.extend(records) # update history
 
-        self.logger.log("info", f"Stage [{stage.name}] completed")
-
         return stage_result
     
     async def exhaust_stages(self):
@@ -182,7 +185,7 @@ class Executor:
         self.request_handler = NewsRequest()
         self.logger = Logger("Inference-Executor")
 
-    async def single_inference_base(self, q, type: str = 'headlines', stop_count: int = 3, **options) -> List[Stage]:
+    async def single_inference_base(self, q, type: str = 'headlines', stop_count: int = ... , **options) -> List[Stage]:
         stages = []
         try:
             if type == 'headlines':
@@ -207,14 +210,14 @@ class Executor:
 
         return stages[:stop_count]
         
-    async def inference_base(self, qx: List[str] | List[List[str]], type: str = 'headlines', stop_count: int = 3, **options) -> List[List[Stage]]:
+    async def inference_base(self, qx: List[str] | List[List[str]], type: str = 'headlines', stop_count: int = ..., **options) -> List[List[Stage]]:
         results = []
         for q in qx:
             result = await self.single_inference_base(q=q, type=type, stop_count=stop_count, **options)
             results.append(result)
         return results
 
-    async def build_base(self, qx: List[str] | List[List[str]] , type: str = 'headlines', stop_count: int = 3, **options):
+    async def build_base(self, qx: List[str] | List[List[str]] , type: str = 'headlines', stop_count: int = ..., **options):
         if not getattr(self, 'stages_wrapper', None):
             self.stage_wrapper = await self.inference_base(qx=qx, type=type, stop_count=stop_count, **options)
 
@@ -254,14 +257,14 @@ class InferentialWorker:
         return self.processor.extract_kwds(min_text)
     
 
-    async def make_title(self, text: str, tokens_max_count: int = 48):
-        return await self.processor.make_summary(text, tokens_max_count)
+    async def make_title(self, text: str, tokens_max_count: int, model_name: str) -> str:
+        return await self.processor.make_summary(text, tokens_max_count, model_name)
     
     def make_tags(self, text: str) -> List[str]:
         # TODO: make this more intelligent
         return ["finance", "stock market", "economy"]
     
-    async def make_image(self, text: str, image_size: str = "512x512") -> bytes:
+    async def make_image(self, text: str, image_size: str) -> bytes:
         if not text or len(text) == 0:
             return None
         image_url: List[str | None] = await self.image_model.generate(prompt=text, size=image_size)
@@ -281,25 +284,24 @@ class InferentialWorker:
             precomputed_labels[str(idx)] = self.make_labels(text)
         return precomputed_labels
     
-    async def __call__(self, texts: List[str] = None, max_title_tokens: int = 8, image_size: str = "512x512"):
+    async def __call__(self, texts: List[str] = None):
         """
         Processes a list of texts and yields Inference objects for each text.
 
         If no texts are provided, the executor_results attribute of this object is used.
 
         :param texts: List of texts to process
-        :param max_title_tokens: Maximum number of tokens in the title
-        :param image_size: Size of the generated image in the format "widthxheight"
         :yield: Inference objects
         """
+
         if not texts and self.executor_results:
             texts = self.executor_results
         precomputed_labels = self.precompute_labels(texts)
         results = {}
         for idx, text in enumerate(texts):
             self.logger.log("info", f"Processing text  at index: {idx + 1} of {len(texts)}")
-            title = await self.make_title(text, max_title_tokens)
-            image = await self.make_image(title, image_size)
+            title = await self.make_title(text, **BroadConfigArgs.SUMMARY_ARGS.value)
+            image = await self.make_image(title, BroadConfigArgs.IMAGE_SIZE.value)
             tags = self.make_tags(text)
             results[str(idx)] = {
                 "title": title,
@@ -327,13 +329,18 @@ class InferentialWorker:
 class MainWorker:
     logger = Logger("Main-Worker")
     inferences = set()
-    async def exec(self, db_uri: str = mongodb_uri, qx: str | List[str] = ["apple stocks", "market performance"], type: str = 'everything', stop_count: int = 2, max_title_tokens: int = 8, image_size: str = "512x512", **options):
+    async def exec(
+            self, db_uri: str = InferencesArgs.MONGODB_URI.value, 
+            qx: str | List[str] = InferencesArgs.QUERIES.value, 
+            type: str = InferencesArgs.REQUETS_TYPE.value, 
+            stop_count: int = Balancer.STOP_COUNT,
+            **options):
         try:
             executor = Executor()
             await executor.build_base(qx=qx, type=type, stop_count=stop_count, **options)
-            results = executor(executor.stage_wrapper[:2])
+            results = executor(executor.stage_wrapper[:stop_count])
             inference_worker = InferentialWorker(results)
-            async for result in inference_worker(max_title_tokens=max_title_tokens, image_size=image_size):
+            async for result in inference_worker():
                 self.inferences.add(result)
 
             pusher = MongoPusher(None)

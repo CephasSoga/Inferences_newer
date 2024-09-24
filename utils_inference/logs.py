@@ -1,6 +1,8 @@
+import time
 import logging
 from typing import Any
 from pathlib import Path
+from functools import wraps
 
 class Logger(object):
     def __init__(self, name: str = None):
@@ -42,5 +44,43 @@ class Logger(object):
         else:
             self.logger.error(f"Invalid log level: {level}. Message: {message}")
 
+# Define the timer decorator that accepts a logger
+def timer(logger=None):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            start_time = time.time()  # Record the start time
+            result = func(*args, **kwargs)  # Call the function
+            end_time = time.time()  # Record the end time
+            execution_time = end_time - start_time  # Calculate execution time
 
+            # Log the execution time using the provided logger
+            message = f"> Function: '[{func.__name__}]'. Runtime: [<OK> in {execution_time:.4f} seconds]. Mode [Sync]. From: [{func.__module__}]."
+            if logger:
+                logger.log("info", message)
+            else:
+                print(message)
+            
+            return result
+        return wrapper
+    return decorator
 
+def async_timer(logger=None):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            start_time = time.time()  # Record the start time
+            result = await func(*args, **kwargs)  # Await the async function
+            end_time = time.time()  # Record the end time
+            execution_time = end_time - start_time  # Calculate execution time
+
+            # Log the execution time using the provided logger
+            message = f"> Function: '[{func.__name__}]'. Runtime: [<OK> in {execution_time:.4f} seconds]. Mode [Async]. From: [{func.__module__}]."
+            if logger:
+                logger.log("info", message)
+            else:
+                print(message)
+            
+            return result
+        return wrapper
+    return decorator

@@ -5,7 +5,7 @@ description = "The very core part of the Gaello X project: how inferences on fut
 authors = ["Cephas Nukunu Soga <110126432+CephasSoga@users.noreply.github.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "worker"}, {include = "utils_inference"}, {include = "_requests"}]
+packages = [{include = "worker"}, {include = "config"},{include = "utils_inference"}, {include = "_requests"}]
 
 [tool.poetry.dependencies]
 python = "^3.12"

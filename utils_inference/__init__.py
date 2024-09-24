@@ -7,4 +7,5 @@
 # @company: Cube AI, Inc.
 
 # This module provides reusable helper scripts.
-# In this particular context, it yield logs that can be used to track progress, success or failure of processes
+# In this particular context, it yield logger objects that can be used to track progress, success or failure of processes
+# Also helps with handling bytes arrays retreival.
