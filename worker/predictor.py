@@ -11,8 +11,8 @@ from functools import partial, wraps
 from datetime import datetime
 
 
-from janine.RichText import TextCompletion
-from janine.Generators import ImageGenerator
+from janine.models.RichText import TextCompletion
+from janine.models.Generators import ImageGenerator
 from utils_inference.logs import Logger, async_timer, timer
 from utils_inference.async_jobs import get_bytes
 from _requests.calls import NewsRequest, Parser

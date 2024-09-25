@@ -5,7 +5,7 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk import pos_tag
 
-from janine.RichText import TextCompletion
+from janine.models.RichText import TextCompletion
 
 class Processor:
 

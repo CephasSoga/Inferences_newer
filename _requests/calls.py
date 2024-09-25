@@ -124,7 +124,7 @@ class NewsRequest:
     async def everything(self, q: str | list[str] = None, sources: str = None, search_in: str = None, domains: str = None, from_param: str = None, to: str = None, language: str = "en", page:  int = None, pageSize: int = None, sortBy: str="relevancy") -> dict:
         """Calls the request method to fetch news articles based on the provided parameters."""
         url = 'https://newsapi.org/v2/everything'
-        self.logger.log("info", f"Requesting  news articles from{url} with params: {locals()}")
+        self.logger.log("info", f"Requesting  news articles from {url} with params: {locals()}")
         try:
             return await self.request(
                 url=url, 
